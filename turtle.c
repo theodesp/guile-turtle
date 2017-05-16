@@ -3,42 +3,61 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
 
 static const int WIDTH = 10;
 static const int HEIGHT = 10;
 
-static FILE *start_gnuplot() {
+static FILE *start_gnuplot()
+{
   FILE *output;
+  // All data traveling through the pipe moves through the kernel
   int pipes[2];
   pid_t pid;
 
   pipe(pipes);
   pid = fork();
+  if (pid > 0)
+  {
+    /* Parent process closes up input side of pipe */
+    close(pipes[0]);
 
-  if (!pid) {
+    output = fdopen(pipes[1], "w");
+
+    fprintf(output, "set multiplot\n");
+    fprintf(output, "set parametric\n");
+    fprintf(output, "set xrange [-%d:%d]\n", WIDTH, WIDTH);
+    fprintf(output, "set yrange [-%d:%d]\n", HEIGHT, HEIGHT);
+    fprintf(output, "set size ratio -1\n");
+    fprintf(output, "unset xtics\n");
+    fprintf(output, "unset ytics\n");
+    fflush(output);
+
+    return output;
+  }
+  else if (pid == 0)
+  {
+    /*CHILD*/
+    /* Child process closes up output side of pipe */
+    close(pipes[1]);
+
     dup2(pipes[0], STDIN_FILENO);
+
     execlp("gnuplot", NULL);
     return NULL; /* Not reached.  */
   }
-
-  output = fdopen(pipes[1], "w");
-
-  fprintf(output, "set multiplot\n");
-  fprintf(output, "set parametric\n");
-  fprintf(output, "set xrange [-%d:%d]\n", WIDTH, WIDTH);
-  fprintf(output, "set yrange [-%d:%d]\n", HEIGHT, HEIGHT);
-  fprintf(output, "set size ratio -1\n");
-  fprintf(output, "unset xtics\n");
-  fprintf(output, "unset ytics\n");
-  fflush(output);
-
-  return output;
+  else
+  {
+    perror("fork");
+    exit(1);
+  }
 }
 
 static FILE *global_output;
 
 static void draw_line(FILE *output, double x1, double y1, double x2,
-                      double y2) {
+                      double y2)
+{
   fprintf(output, "plot [0:1] %f + %f * t, %f + %f * t notitle\n", x1, x2 - x1,
           y1, y2 - y1);
   fflush(output);
@@ -48,7 +67,8 @@ static double x, y;
 static double direction;
 static int pendown;
 
-static SCM tortoise_reset() {
+static SCM tortoise_reset()
+{
   x = y = 0.0;
   direction = 0.0;
   pendown = 1;
@@ -59,25 +79,29 @@ static SCM tortoise_reset() {
   return SCM_UNSPECIFIED;
 }
 
-static SCM tortoise_pendown() {
+static SCM tortoise_pendown()
+{
   SCM result = scm_from_bool(pendown);
   pendown = 1;
   return result;
 }
 
-static SCM tortoise_penup() {
+static SCM tortoise_penup()
+{
   SCM result = scm_from_bool(pendown);
   pendown = 0;
   return result;
 }
 
-static SCM tortoise_turn(SCM degrees) {
+static SCM tortoise_turn(SCM degrees)
+{
   const double value = scm_to_double(degrees);
   direction += M_PI / 180.0 * value;
   return scm_from_double(direction * 180.0 / M_PI);
 }
 
-static SCM tortoise_move(SCM length) {
+static SCM tortoise_move(SCM length)
+{
   const double value = scm_to_double(length);
   double newX, newY;
 
@@ -93,7 +117,8 @@ static SCM tortoise_move(SCM length) {
   return scm_list_2(scm_from_double(x), scm_from_double(y));
 }
 
-static void *register_functions(void *data) {
+static void *register_functions(void *data)
+{
   scm_c_define_gsubr("tortoise-reset", 0, 0, 0, &tortoise_reset);
   scm_c_define_gsubr("tortoise-penup", 0, 0, 0, &tortoise_penup);
   scm_c_define_gsubr("tortoise-pendown", 0, 0, 0, &tortoise_pendown);
@@ -102,7 +127,8 @@ static void *register_functions(void *data) {
   return NULL;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
   global_output = start_gnuplot();
 
   scm_with_guile(&register_functions, NULL);
