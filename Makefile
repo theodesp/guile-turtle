@@ -1,5 +1,5 @@
 CFLAGS = `guile-config compile`
-LIBS = `guile-config link`
+LIBS = `guile-config link` -lm
 
 .PHONY: clean build run
 
