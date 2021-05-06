@@ -12,6 +12,10 @@ A simple example on how to embed Guile Scheme to C using a simple “Tortoise”
 	./turtle
 ```
 
+## Setting up a development environment with guix
+
+guix environment -m manifest.scm
+
 ## Commands
 ```
 guile> (tortoise-move 1)
@@ -25,3 +29,5 @@ guile> (tortoise-reset)
 
 ### Note
 If it complains about default terminal just export `GNUTERM=x11` or `qt`
+
+
